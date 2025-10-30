@@ -1,0 +1,151 @@
+@import "./forms.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  input, select, textarea {
+    @apply w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-white placeholder:text-white/50;
+    @apply focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all;
+  }
+  input[type="checkbox"], input[type="radio"] {
+    @apply w-auto;
+  }
+  button {
+    @apply transition-all duration-200;
+  }
+}
+
+/* Theme tokens for StudySocial */
+:root {
+  --color-surface: 12 16 30;
+  --color-card: 28 32 52;
+  --color-accent: 6 182 212;
+  --color-accent-light: 34 211 238;
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger: 239 68 68;
+  --color-text: 255 255 255;
+  --shadow-glass: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+html, body {
+  @apply min-h-screen;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(6, 182, 212, 0.08), transparent 70%),
+    radial-gradient(1000px 500px at 90% 110%, rgba(34, 211, 238, 0.06), transparent 75%),
+    linear-gradient(180deg, #0E1427 0%, #0B1120 60%, #0A0F1C 100%);
+  background-attachment: fixed;
+  color: rgba(255, 255, 255, 0.92);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}
+
+/* Container utilities */
+.container-max {
+  max-width: min(1320px, 96vw);
+  margin-inline: auto;
+  padding-inline: clamp(16px, 2.5vw, 28px);
+}
+
+/* Cards & glass */
+.glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  backdrop-filter: saturate(140%) blur(16px);
+  @apply border border-white/10 rounded-2xl shadow-glass;
+}
+
+.card {
+  background: rgba(var(--color-card), 0.5);
+  backdrop-filter: blur(8px);
+  @apply border border-white/10 rounded-2xl shadow-soft;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft), 0 0 20px rgba(6, 182, 212, 0.1);
+}
+
+/* Section rhythm */
+.section { @apply py-6 md:py-10; }
+.grid-2 { @apply grid grid-cols-1 md:grid-cols-2 gap-6; }
+.grid-3 { @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6; }
+.grid-4 { @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4; }
+
+/* Badge utility */
+.badge {
+  @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-white/10 text-white/80 border border-white/20;
+}
+
+/* Focus visible styling */
+*:focus-visible {
+  @apply outline-none ring-2 ring-cyan-500 ring-offset-2 ring-offset-[#0B1120];
+}
+
+/* Fullscreen helpers */
+.fullscreen-fill {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+
+/* Smooth transitions */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* Chat bubbles */
+.chat-bubble {
+  @apply rounded-xl p-3 max-w-[85%] border border-white/10;
+}
+.chat-me {
+  @apply ml-auto bg-cyan-600/20 border-cyan-500/30;
+}
+.chat-them {
+  @apply mr-auto bg-white/5;
+}
+
+/* Select and input base styling */
+.select, .input {
+  @apply w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder:text-white/50;
+  @apply focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none transition;
+}
+
+/* Fix dropdown option visibility - ensure dark background and white text */
+select option {
+  background-color: rgb(20, 24, 42);
+  color: white;
+  padding: 8px;
+}
+
+select option:checked,
+select option:hover {
+  background: linear-gradient(0deg, rgb(6, 182, 212) 0%, rgb(20, 40, 60) 100%);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.5);
+}

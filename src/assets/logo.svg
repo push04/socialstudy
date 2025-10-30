@@ -1,0 +1,12 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="128" height="128" rx="24" fill="#12183a"/>
+<g filter="url(#f1)"><circle cx="64" cy="44" r="20" fill="#7c6cff"/></g>
+<g filter="url(#f2)"><circle cx="44" cy="84" r="16" fill="#3ad1c1"/></g>
+<g filter="url(#f3)"><circle cx="88" cy="84" r="12" fill="#9ba7ff"/></g>
+<path d="M44 84C54 68 74 68 88 84" stroke="#8fa1c3" stroke-width="4" stroke-linecap="round"/>
+<defs>
+<filter id="f1"><feGaussianBlur stdDeviation="2"/></filter>
+<filter id="f2"><feGaussianBlur stdDeviation="2"/></filter>
+<filter id="f3"><feGaussianBlur stdDeviation="2"/></filter>
+</defs>
+</svg>

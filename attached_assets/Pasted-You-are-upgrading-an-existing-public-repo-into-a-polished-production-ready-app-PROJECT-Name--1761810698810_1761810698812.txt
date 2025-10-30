@@ -1,0 +1,298 @@
+You are upgrading an existing public repo into a polished, production-ready app.
+
+# PROJECT
+Name: StudySocial
+Tagline (must be exact on hero): "Crush goals. Together."
+Stack: React + Vite + TypeScript + Tailwind (ESM) + Supabase
+Host: Netlify (Vite static build)
+Goal: A beautiful, professional, responsive study-buddy platform with zero build/runtime errors.
+
+# CONTEXT
+Known surfaces/routes: Home, Auth (login/register/magic link), Groups, Chat, Calendar, Pomodoro (fullscreen), Video Room, Profile.
+Repo often has issues with: Tailwind/PostCSS ESM, missing exports, auth null safety, and Supabase schema mismatches.
+
+# HIGH-LEVEL OBJECTIVES
+1) Remove all build errors and runtime crashes (Netlify and local).
+2) Fix auth so login/register/magic link work consistently. No null user reads.
+3) Enforce Group unique keys and admin labelling; allow anyone to start video calls; admin clearly marked.
+4) Make Pomodoro fullscreen truly full-bleed, no bottom blank, add ambient sound, keyboard shortcuts, and a small stats strip.
+5) Make Calendar robust (week/month, drag-to-create, edit modal), default tz Asia/Kolkata with browser detection.
+6) Clean, consistent **UI/UX**: no giant side gutters, readable forms in dark mode, glass overlays, shadows, dropdowns, tastefully animated, mobile-first.
+7) Add a free/open-source video solution with more features than Jitsi OR an adapter that supports LiveKit and (optionally) Jitsi as fallback.
+8) Ensure Tailwind/PostCSS are ESM and plugin usage won’t break builds; remove reliance on undefined utilities.
+9) Deliver a single "build passes on Netlify" state with environment variables documented.
+10) Add a minimal test & lint setup and a QA checklist.
+
+# BUGS & BUILD FAILURES TO FIX (DO THESE FIRST)
+- Tailwind config loads plugins not installed (e.g., @tailwindcss/forms) → either install or remove from config.
+- PostCSS config using CommonJS in an ESM project → convert to ESM: `export default { plugins: [...] }`.
+- Import/export mismatches:
+  - `main.tsx` must import `App` via default import if `App.tsx` exports default.
+  - Any imports like `{ getUserOrWarn }`, `{ getUserOrThrow }`, `{ VideoRoom }` must match actual named exports in `src/lib/supabase.ts` and `src/components/VideoRoom.tsx`. Either export them or change imports.
+- JSX parse errors from unclosed tags (e.g., in `Home.tsx`) → close `<Card>`/`<p>` properly.
+- Tailwind `@apply` to undefined tokens (e.g., `bg-card/80`) → define `card` color in theme as CSS var (`rgb(var(--color-card)/<alpha>)`) or stop using that `@apply`.
+- Case-sensitive path mismatches that work locally but fail on Netlify → fix import paths to exact filename case.
+
+# ENVIRONMENT & CONFIG (LOCK THIS DOWN)
+- Vite build (Netlify):
+  - Build command: `npm run build`
+  - Publish: `dist`
+  - Node version: use 20.x LTS (add `.nvmrc` with `v20.11.1` or set `NODE_VERSION=20` in Netlify).
+- PostCSS ESM (`postcss.config.js`):
+  ```js
+  // postcss.config.js
+  import tailwindcss from "tailwindcss";
+  import autoprefixer from "autoprefixer";
+  export default { plugins: [tailwindcss, autoprefixer] };
+Tailwind ESM (tailwind.config.js) — if using forms plugin then install it, otherwise remove:
+
+js
+Copy code
+// tailwind.config.js
+export default {
+  content: ["./index.html","./src/**/*.{js,ts,jsx,tsx}"],
+  theme: {
+    container: {
+      center: true,
+      padding: { DEFAULT: "1rem", md: "1.25rem", lg: "1.5rem" },
+      screens: { sm:"640px", md:"768px", lg:"1024px", xl:"1200px", "2xl":"1320px" }
+    },
+    extend: {
+      colors: {
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        card: "rgb(var(--color-card) / <alpha-value>)",
+        primary: { DEFAULT: "#06B6D4", 500:"#06B6D4", 600:"#0891B2", 400:"#22D3EE" },
+        success: "#22C55E", warning:"#F59E0B", danger:"#EF4444"
+      },
+      boxShadow: {
+        glass: "0 12px 40px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.05)",
+        soft: "0 10px 28px rgba(0,0,0,.28)"
+      },
+      borderRadius: { "2xl":"1.25rem", "3xl":"1.5rem" }
+    }
+  },
+  plugins: [] // if you add forms: plugins: [forms()]
+}
+Global CSS tokens (imported once in src/main.tsx):
+
+css
+Copy code
+/* src/styles/globals.css */
+:root{
+  --color-surface: 12 16 30;
+  --color-card: 28 32 52;
+}
+html,body,#root{height:100%;}
+body{
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(34,211,238,.15), transparent),
+              radial-gradient(900px 500px at 90% -10%, rgba(6,182,212,.12), transparent),
+              linear-gradient(180deg, #0B1120 0%, #0E1427 100%);
+  color: #E6EAF2;
+}
+.container{ max-width:1320px; margin:0 auto; padding-inline:clamp(16px,2.5vw,28px); }
+ENV VARS (Netlify → Build & deploy → Environment)
+VITE_SUPABASE_URL=<your-supabase-url>
+
+VITE_SUPABASE_ANON_KEY=<your-anon-key>
+
+(If using LiveKit dev keys) VITE_LIVEKIT_URL, VITE_LIVEKIT_TOKEN_ENDPOINT (or temporary dev API key).
+
+SUPABASE: SQL & RLS (REUSE EXISTING, ADD SMALL UPGRADES)
+Ensure profiles, study_groups, group_members, messages, message_reactions, study_sessions, optional pomodoro_sessions are present (your existing schema is okay).
+
+Add unique group key:
+
+sql
+Copy code
+alter table public.study_groups
+  add column if not exists unique_key text unique;
+Backfill unique_key for existing rows and enforce not null where possible:
+
+sql
+Copy code
+update public.study_groups
+   set unique_key = coalesce(unique_key, encode(gen_random_bytes(8), 'hex'))
+ where unique_key is null;
+Make sure the profile auto-create trigger exists on auth.users so group_members.user_id always has an FK row (prevents “violates foreign key constraint”).
+
+Add helpful index:
+
+sql
+Copy code
+create index if not exists idx_groups_key on public.study_groups(unique_key);
+AUTH (FIXES & UX)
+src/lib/supabase.ts:
+
+Export supabase client AND the helpers you import elsewhere:
+
+getUserOrThrow() → supabase.auth.getUser(); throw if missing.
+
+getUserOrNull() → returns null if signed out.
+
+toastError()/toastSuccess() (or import from your toast lib).
+
+All pages calling auth must check user before reading user.id.
+
+Magic link email template (simple, brand-safe):
+
+Subject: “StudySocial — Magic Link”
+
+Body: “Use this link to sign in: {{ .ConfirmationURL }}”
+
+Auth UI: no white text on white background; explicit labels; errors surfaced under fields; “Check your email” confirmation page.
+
+GROUPS (REQUIRE UNIQUE KEY + ADMIN NAME)
+Create Group modal fields: name (required), unique_key (required, auto-suggest), purpose (optional), courses (typeahead), visibility (“public/unlisted”), notes (optional).
+
+On group card/list: show admin name badge, member count, next session time if any.
+
+Anyone can start video call; admin still labeled.
+
+CHAT
+Sidebar: group list; main: messages with emoji reactions and timestamps; composer with attachment button (even if placeholder).
+
+Start Call button in header launches the Video Room for the active group.
+
+VIDEO ROOM (ADAPTER ARCHITECTURE)
+Implement VideoProvider interface and two adapters:
+
+LiveKitAdapter (preferred; free/dev-friendly; grid layout, screenshare, mute, camera toggle, participants list).
+
+JitsiAdapter (optional fallback).
+
+Fullscreen controls, hover reveal toolbar: mic, cam, share, leave, layout toggle, participants, chat (can be in-room chat), record (placeholder).
+
+Mark admin with a chip on tile; but any member can start call.
+
+POMODORO (FULLSCREEN, POLISHED)
+Default card with settings: focus, break, cycles.
+
+Fullscreen mode:
+
+Must fill viewport (no bottom blank).
+
+Big countdown ring, subtle animated background, ambient sound toggle.
+
+Keyboard shortcuts: “F” fullscreen, “Space” start/pause, “N” next.
+
+Bottom strip: “Focus today”, “Next break”, “Cycle x/y”.
+
+Add a11y polite live region for remaining time announcements every minute.
+
+CALENDAR (ROBUST)
+Week and Month views; drag-to-create session.
+
+Edit modal: title, (optional) group, start, end, repeat, notes.
+
+Default tz = Asia/Kolkata; detect browser tz on first load.
+
+Export/share simple (avoid ICS jargon in the UI).
+
+PROFILE
+Avatar, display name, study style (quiet/interactive), courses (chips), time zone (auto India, editable), optional availability grid.
+
+Persist updates to profiles table.
+
+UI/UX & THEME POLISH
+Header (top bar): glass, compact height, left logo + StudySocial, right nav (Home/Features/Chat/Groups/Calendar/Timer/Video Room/Profile/Auth), Theme toggle.
+
+Container max width 1320px; eliminate giant side gutters.
+
+Forms: readable in dark mode even with minimal classes → add base styles on input/select/textarea via Tailwind @layer base.
+
+Buttons & cards: soft/glass shadows, subtle hover (translateY(-1px)), focus rings in cyan.
+
+Dropdowns/menus: animated scale(0.98→1), opacity, no layout shift.
+
+RUNTIME SAFETY CHECKS (NO MORE "cannot read properties of null (reading 'id')")
+Before any .id access, ensure user != null. If null, show a toast and redirect to /auth.
+
+When joining a group: ensure profile row exists (trigger should have created it); if not, create profile first.
+
+When calling Supabase, handle { error } and surface toasts.
+
+CODE QUALITY
+ESLint + Prettier (TypeScript):
+
+"@typescript-eslint/recommended", "plugin:react-hooks/recommended".
+
+Strict TypeScript where feasible.
+
+Add simple tests:
+
+Utility tests (timer logic; formatting).
+
+Render tests for critical pages do not crash.
+
+NETLIFY BUILD CHECK
+Ensure tailwind.config.js does NOT require missing plugins.
+
+Ensure postcss.config.js is ESM.
+
+Ensure all imports match actual exports (default vs named).
+
+Ensure case-sensitive import paths match filenames.
+
+Build script: npm run build should succeed locally and on Netlify.
+
+ACCEPTANCE CRITERIA (DEFINITION OF DONE)
+✅ npm run build passes locally (Node 20+) and on Netlify.
+
+✅ Visiting the site renders all pages without console errors.
+
+✅ Auth works (login/register/magic link), no null user crashes; auth buttons hidden when logged in.
+
+✅ Groups: creation requires unique key; admin visible; anyone can start video.
+
+✅ Chat: messages, reactions, start call button present.
+
+✅ Video Room: fullscreen, responsive grid, controls; admin badge; anyone can start; no clutter.
+
+✅ Pomodoro fullscreen covers entire viewport; no bottom blank; ambient sound; shortcuts; bottom stats strip.
+
+✅ Calendar: week/month; drag-to-create; edit modal; default Asia/Kolkata; browser tz detection.
+
+✅ Forms readable in dark mode; no white-on-white anywhere.
+
+✅ Design: clean, modern, glass morphism done tastefully; mobile optimized.
+
+WHAT TO EDIT (FILE-LEVEL INSTRUCTIONS)
+Convert postcss.config.js to ESM; commit.
+
+Tailwind config: ESM; remove external plugins or install them; define card color.
+
+Fix src/main.tsx import of App to default if needed.
+
+src/lib/supabase.ts:
+
+Export supabase, getUserOrThrow, getUserOrNull, toastError/toastSuccess (or import from toast lib).
+
+Fix all imports that use missing exports (getUserOrThrow, getUserOrWarn, VideoRoom).
+
+Add a VideoProvider abstraction with LiveKitAdapter (and optional JitsiAdapter).
+
+Pomodoro page: implement fullscreen API, animated ring, ambient sounds, keyboard shortcuts, bottom stats strip.
+
+Calendar page: implement drag-to-create, edit modal; default tz; browser detection.
+
+Groups: add unique key input, auto-suggest, validation; admin badge; anyone-can-start-call toggle (true by default).
+
+Global styles: add base styles for inputs/selects/textareas to ensure readability; container width/padding; background gradient/glass tokens.
+
+Add ESLint/Prettier config and fix obvious warnings.
+
+COMMANDS TO RUN
+npm ci
+
+npm run lint (after adding ESLint)
+
+npm run build
+
+npm run preview
+
+OUTPUT
+Modify only necessary files; keep commit messages clear.
+
+Provide a final summary of changes + where to find the new features.
+
+Ensure no build errors remain and all acceptance criteria pass.
